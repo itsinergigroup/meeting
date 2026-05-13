@@ -1,0 +1,185 @@
+@extends('admin.layouts.app')
+
+@section('title', 'Kelola Bookings')
+
+@section('content')
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900">Kelola Bookings</h1>
+</div>
+
+<!-- Filter -->
+<div class="bg-white shadow rounded-lg p-4 mb-6">
+    <form method="GET" action="{{ route('admin.bookings.index') }}" class="flex gap-4 flex-wrap">
+        <div class="flex-1 min-w-[200px]">
+            <label for="meeting_room_id" class="block text-sm font-medium text-gray-700 mb-1">Ruang Meeting</label>
+            <select name="meeting_room_id" id="meeting_room_id"
+                class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Semua Ruangan</option>
+                @foreach($meetingRooms as $room)
+                <option value="{{ $room->id }}" {{ request('meeting_room_id') == $room->id ? 'selected' : '' }}>
+                    {{ $room->name }}
+                </option>
+                @endforeach
+            </select>
+        </div>
+        <div class="flex-1 min-w-[200px]">
+            <label for="date" class="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
+            <input type="date" name="date" id="date" value="{{ request('date') }}"
+                class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+        </div>
+        <div class="flex-1 min-w-[200px]">
+            <label for="status" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select name="status" id="status"
+                class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Semua Status</option>
+                <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
+                <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+            </select>
+        </div>
+        <div class="flex items-end gap-2">
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                Filter
+            </button>
+            <a href="{{ route('admin.bookings.index') }}" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                Reset
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Tampilan Grid berdasarkan Jam (jika filter ruangan dan tanggal diisi) -->
+@if(request()->filled('meeting_room_id') && request()->filled('date'))
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-xl font-semibold mb-4">
+        Jadwal {{ $meetingRooms->find(request('meeting_room_id'))->name }} -
+        {{ \Carbon\Carbon::parse(request('date'))->format('d M Y') }}
+    </h2>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full border-collapse border border-gray-300">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">Jam</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">User</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">Tujuan</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @php
+                    $startHour = 8;
+                    $endHour = 17;
+                    $filteredBookings = $bookings->filter(function($booking) {
+                        return $booking->meeting_room_id == request('meeting_room_id')
+                            && $booking->booking_date->format('Y-m-d') == request('date');
+                    });
+                @endphp
+
+                @for($hour = $startHour; $hour <= $endHour; $hour++)
+                    @php
+                        $timeSlot = sprintf('%02d:00', $hour);
+                        $nextTimeSlot = sprintf('%02d:00', $hour + 1);
+
+                        $booking = $filteredBookings->first(function($b) use ($timeSlot, $nextTimeSlot) {
+                            $start = substr($b->start_time, 0, 5);
+                            $end = substr($b->end_time, 0, 5);
+                            return $start <= $timeSlot && $end > $timeSlot;
+                        });
+                    @endphp
+
+                    <tr class="{{ $booking ? ($booking->status === 'active' ? 'bg-green-50' : 'bg-red-50') : '' }}">
+                        <td class="border border-gray-300 px-4 py-2 text-sm font-medium">
+                            {{ $timeSlot }} - {{ $nextTimeSlot }}
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2 text-sm">
+                            {{ $booking ? $booking->user->name : '-' }}
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2 text-sm">
+                            {{ $booking ? Str::limit($booking->purpose, 40) : '-' }}
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2 text-sm">
+                            @if($booking)
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                    {{ $booking->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                    {{ $booking->status }}
+                                </span>
+                            @else
+                                <span class="text-gray-400">Tersedia</span>
+                            @endif
+                        </td>
+                    </tr>
+                @endfor
+            </tbody>
+        </table>
+    </div>
+</div>
+@endif
+
+<!-- Tabel Daftar Bookings -->
+<div class="bg-white shadow rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ruang</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Waktu</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tujuan</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            @forelse($bookings as $booking)
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ $booking->user->name }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ $booking->meetingRoom->name }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ $booking->booking_date->format('d M Y') }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ substr($booking->start_time, 0, 5) }} - {{ substr($booking->end_time, 0, 5) }}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">
+                    {{ Str::limit($booking->purpose, 30) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        {{ $booking->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                        {{ $booking->status }}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    @if($booking->status === 'active')
+                    <form action="{{ route('admin.bookings.destroy', $booking) }}" method="POST" class="inline">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="text-red-600 hover:text-red-900"
+                            onclick="return confirm('Yakin ingin membatalkan booking ini?')">
+                            Batalkan
+                        </button>
+                    </form>
+                    @else
+                    <span class="text-gray-400">-</span>
+                    @endif
+                </td>
+            </tr>
+            @empty
+            <tr>
+                <td colspan="7" class="px-6 py-4 text-center text-gray-500">
+                    Belum ada booking
+                </td>
+            </tr>
+            @endforelse
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4">
+    {{ $bookings->links() }}
+</div>
+@endsection
